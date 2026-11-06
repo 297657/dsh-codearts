@@ -85,8 +85,6 @@ docs/             说明文档（功能清单、SOP、DSH 接入说明）
 ## 相关文档
 
 - [docs/功能清单.md](docs/功能清单.md) — 版本沿革与功能点清单
-- [docs/dsh-workbuddy-SOP.md](docs/dsh-workbuddy-SOP.md) — 配套插件 dsh-workbuddy 的标准操作流程
-- [docs/dsh-接入说明.md](docs/dsh-接入说明.md) — DSH 平台的插件/技能/MCP 接入方式
 - [MEMORY.md](MEMORY.md) — 开发备忘（协议细节与踩坑记录）
 - [tools/SYNC-README.md](tools/SYNC-README.md) — 跨设备同步包使用说明
 
