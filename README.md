@@ -71,6 +71,17 @@ docs/             说明文档（功能清单、SOP、DSH 接入说明）
 - CodeArts 每账号**并发会话上限 3**，插件内置闸门，勿在插件外并发调用。
 - 判定签到结果看响应体 `code` 字段而非 HTTP 状态（重复签到是 HTTP 400 + `code:10001`）。
 
+## 🔒 数据安全约定
+
+本仓库**只放代码和文档，不放任何个人数据**。已入库内容经 [`tools/secret-scan.mjs`](tools/secret-scan.mjs) 全量扫描确认：无账号凭据、无 JWT、无 AK/SK、无邮箱/手机号、无个人目录路径。
+
+- 凭据与账号清单始终留在本机 `~/.dsh/`（`.credentials.yaml`、`channel-pack/state.json` 等），由 `.gitignore` 排除；
+- 每次 `git commit` 前自动跑敏感信息扫描（`.git/hooks/pre-commit`），命中即阻止提交；
+- 新设备安装插件后，账号需在该设备上重新登录，不从仓库同步；
+- 文档示例中的用户名路径统一写作 `<你的用户目录>`。
+
+手动自查：`node tools/secret-scan.mjs`（全量）或 `node tools/secret-scan.mjs --staged`（仅暂存区）。
+
 ## 相关文档
 
 - [docs/功能清单.md](docs/功能清单.md) — 版本沿革与功能点清单

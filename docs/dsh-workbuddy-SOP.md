@@ -81,10 +81,10 @@ DSH Host Process
 curl http://127.0.0.1:18488/workbuddy/probe
 
 # 2. 检查插件已注册
-node -e "const j=require('C:/Users/jxwl/.dsh/profiles/desktop/package.json'); console.log('bundles:', JSON.stringify(j.dsh?.profile?.bundles))"
+node -e "const j=require('<你的用户目录>/.dsh/profiles/desktop/package.json'); console.log('bundles:', JSON.stringify(j.dsh?.profile?.bundles))"
 
 # 3. 检查本地网关
-$key = (Get-Content C:\Users\jxwl\.dsh\openai-gateway\api-key -Raw).Trim()
+$key = (Get-Content <你的用户目录>\.dsh\openai-gateway\api-key -Raw).Trim()
 curl -H "Authorization: Bearer $key" http://127.0.0.1:8326/v1/models | ConvertFrom-Json | Select-Object -ExpandProperty data | Where-Object { $_.id -like 'workbuddy/*' } | Measure-Object
 ```
 

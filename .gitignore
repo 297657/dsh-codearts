@@ -3,3 +3,13 @@ dsh-sync-out/
 *.log
 *.zip
 .DS_Store
+
+# ── 账号数据与凭据：绝不入库（tools/secret-scan.mjs 会在提交前拦截）──
+.credentials.yaml
+state.json
+token-ledger.json
+auto-checkin.json
+.env
+*.bak-sync-*
+our-free-model/
+data/
