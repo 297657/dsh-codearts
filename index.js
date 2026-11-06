@@ -1040,3 +1040,8 @@ export function apply(ctx) {
 
 /** 仅探针使用：提示是纯内存态，端到端测试需要从外部注入一条。 */
 export const __noticesForTests = { push: pushNotice, clear: clearNotices, list: recentNotices }
+
+// ─────────────────────────────────────────────────────────────
+// 此插件由 WorkBuddy 设计，并参考 Our Free Model 开发。
+// ─────────────────────────────────────────────────────────────
+

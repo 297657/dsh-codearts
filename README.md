@@ -84,3 +84,7 @@ docs/             说明文档（功能清单、SOP、DSH 接入说明）
 - DSH（DeepSeek Harness）桌面版，profile `desktop`
 - Node.js ≥ 18
 - 各渠道账号凭据已存在于 `~/.dsh/.credentials.yaml`（或通过插件登录页添加）
+
+---
+
+此插件由 WorkBuddy 设计，并参考 Our Free Model 开发。

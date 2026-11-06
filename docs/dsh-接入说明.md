@@ -63,3 +63,7 @@ GET http://127.0.0.1:18488/workbuddy/probe
 
 - WorkBuddy 专属技能（比如 `wb-auto-checkin`）搬过去跑不了——它依赖 WorkBuddy 宿主的 wbipc 通道和登录态。格式通用不等于内容通用，搬之前先确认脚本依赖的平台接口。
 - dsh 还在 developer preview，README 明确说会有破坏性变更，升级前备份 `~/.dsh/sessions` 和 profiles。
+
+---
+
+此插件由 WorkBuddy 设计，并参考 Our Free Model 开发。

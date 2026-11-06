@@ -251,3 +251,7 @@ Tokens prefixed with @ are paths the user explicitly referenced.
 
 注意：`D:/deepseek_harness/dsh-workbuddy` 已不存在，插件真实位置是 `D:/dsh-workbuddy`
 （`profiles/desktop/node_modules/@local/dsh-workbuddy` → `/d/dsh-workbuddy`）。改完仍需重启 DSH。
+
+---
+
+此插件由 WorkBuddy 设计，并参考 Our Free Model 开发。
