@@ -1,0 +1,28 @@
+{
+  "name": "@local/dsh-codearts",
+  "version": "0.6.5",
+  "private": true,
+  "type": "module",
+  "main": "./index.js",
+  "description": "CodeArts (Huawei Cloud) daily check-in and free-credit model channel inside DeepSeek Harness: browser login (OAuth+PKCE+DPoP), automatic credential renewal, per-account credit balances, SigV4-signed chat completions with tool calls (standard channel plus DSML for deepseek-v4), per-account session gating with account rotation, and a cached settings API whose transient notices carry timestamps and are cleared on refresh.",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "lib/",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": []
+    }
+  }
+}
