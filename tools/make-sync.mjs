@@ -71,7 +71,11 @@ const dataSources = [
   // profile 层：依赖清单与补丁（补丁只做参考，不自动覆盖）
   { src: join(profileDir, 'package.json'), dest: 'data/profile-package.json', secret: false },
   { src: join(profileDir, 'cordis.patch.yml'), dest: 'data/reference-cordis.patch.yml', secret: false },
-].filter(Boolean).filter(row => existsSync(row.src)).filter(() => !pluginOnly)
+].filter(Boolean).filter(row => existsSync(row.src))
+  .filter(() => !pluginOnly)
+  // --no-credentials 时排除所有标记 secret 的数据（凭据、账号清单、token 台账、ofm 账号），
+  // 只留 auto-checkin 计划、profile 依赖清单、偏好参考这类与账号无关的配置。
+  .filter(row => withCredentials || !row.secret)
 
 if (pluginSources.length === 0) {
   console.error('没有找到任何插件源码目录，中止。')
