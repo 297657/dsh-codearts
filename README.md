@@ -59,6 +59,7 @@ lib/
 tools/
   make-sync.mjs     打同步包（--plugin-only 打纯插件包）
   install-sync.mjs  同步包安装器（合并式，不破坏目标已有数据）
+  install-phone.mjs 手机本机引擎一键安装器（自动探测 profile、建软链，无需 npm install）
 docs/             说明文档（功能清单、SOP、DSH 接入说明）
 ```
 
@@ -96,6 +97,24 @@ docs/             说明文档（功能清单、SOP、DSH 接入说明）
 - **WorkBuddy 传输自适应**（`lib/workbuddy-direct.js`，v0.9.0）：`wbai` 渠道在桌面端在跑时走 wbipc；否则用 `ctx.credentials` 里的 WorkBuddy 凭据直接请求 `https://{domain}/v2/chat/completions`。逆向 WorkBuddy 客户端确认：11128「渠道校验」校验的是消息文本指纹（≈110 字符连续窗口比对）而非设备签名，网关身份头（Bearer + X-User-Id/X-Enterprise-Id + X-IDE-* + x-codebuddy-request 等）全部可从凭据和固定值构造。插件内置指纹改写 + system 降级两道处理。`DirectClient` 与 `WbipcClient` 接口一致，适配器无感切换。两端都没有（无桌面端且未登录 WorkBuddy）才不注册渠道。
 - **新环境账号池**：`channel-pack/state.json` 不存在时按空池初始化并自动建目录，手机首次添加账号不会失败。
 - 手机上首次使用需在各渠道**重新登录**（CodeArts 是一次性 refresh_token，多设备不能共用同一份凭据）。WorkBuddy 直连需本设备先添加一个 WorkBuddy 账号（设置页扫码登录）。
+
+### 在手机 DSH Go 上一键安装
+
+本仓库是公开仓库，手机可直接下载。在本机引擎的终端/对话里执行（把整段一次性粘贴）：
+
+```sh
+cd /root 2>/dev/null || cd "$HOME"
+curl -fsSL -o dsh-codearts.zip https://codeload.github.com/297657/dsh-codearts/zip/refs/heads/main \
+  && python3 -c "import zipfile;zipfile.ZipFile('dsh-codearts.zip').extractall('.')" \
+  && cd dsh-codearts-main \
+  && node tools/install-phone.mjs
+```
+
+- 没有 `python3` 时改用 `unzip -o dsh-codearts.zip && cd dsh-codearts-main`（Alpine 先 `apk add unzip`；Ubuntu 先 `apt install unzip`）。
+- 脚本只用 Node 内置模块，不跑 `npm install`、不联网、不碰账号与凭据；自动探测 `~/.dsh`（或 `/root/.dsh`、`DSH_HOME`）下所有 profile，逐个写 `link:` 依赖 + 软链，改动前自动备份（`.bak-phone-<时间戳>`），重复运行幂等。
+- 可用 `--home <目录>` / `--profile <名字>` 指定路径，或先加 `--dry-run` 预演。
+- 跑完在 DSH Go 里 **设置 › 本机引擎 › 重启引擎**，再到 **设置 › 插件** 确认已安装。这个插件是 `@local/` 私有包，不在插件市场里，重启后出现在「已安装」而非市场。
+- 若本机引擎没有终端入口，也可把上面这条作为一条指令直接发给 DSH Go 的对话，让它在本机执行。
 
 安装到手机：用 `tools/make-sync.mjs --plugin-only` 打纯插件包，或把源码放到手机 DSH Go 本机引擎的 profile 里用 `link:` 安装，重启后生效。
 
