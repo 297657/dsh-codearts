@@ -655,7 +655,16 @@ export function apply(ctx) {
 
   // ── LLM 渠道：让 CodeArts / WorkBuddy 的免费额度出现在模型选择器里 ────────
   // 单独 inject(['llm'])：缺了它只少渠道，签到与设置页照常可用。
-  const workBuddyChannel = createWorkBuddyChannel({ logger })
+  //
+  // WorkBuddy 渠道的凭据解析器：供手机端「直连」用（无 Windows 桌面端时）。
+  // 与签到共用 credentialOf 双通道，桌面读文件、手机读 ctx.credentials。
+  const resolveWorkBuddyCredential = async () => {
+    const account = accountsOf('workbuddy').find(row => row.enabled !== false)
+    if (account === undefined) return undefined
+    const resolved = await credentialOf(account, deps)
+    return resolved.ok ? resolved.credential : undefined
+  }
+  const workBuddyChannel = createWorkBuddyChannel({ logger, resolveCredential: resolveWorkBuddyCredential })
 
   ctx.inject(['llm'], scoped => {
     const llm = scoped.llm
@@ -686,10 +695,17 @@ export function apply(ctx) {
     scoped.effect(() => {
       let dispose = undefined
       let cancelled = false
-      void probeDesktop().then(desktop => {
+      void probeDesktop().then(async desktop => {
         if (cancelled) return
-        if (!desktop?.running) {
-          logger.info?.('dsh-codearts-checkin: 未检测到 WorkBuddy 桌面端，跳过 wbai 渠道（手机端正常现象）')
+        // 桌面端在跑 → wbipc 通道；不在跑但有本设备登录的 WorkBuddy 账号 →
+        // 直连通道（手机 DSH Go）。两者都没有才跳过——避免空渠道出现在选择器。
+        let available = desktop?.running === true
+        if (!available) {
+          const credential = await resolveWorkBuddyCredential().catch(() => undefined)
+          available = credential !== undefined
+        }
+        if (!available) {
+          logger.info?.('dsh-codearts-checkin: 无 WorkBuddy 桌面端、本设备也未登录 WorkBuddy 账号，跳过 wbai 渠道')
           return
         }
         try {
@@ -825,18 +841,24 @@ export function apply(ctx) {
         }
 
         // ── WorkBuddy 渠道：桌面端状态 + 账号 + 模型目录 ────────────────────
-        // 走 wbipc（宿主注入身份头），凭据不经过本插件，也不写入任何文件。
+        // 桌面端在跑 → wbipc（宿主注入身份头）；否则本设备登录了 WorkBuddy
+        // 账号 → 凭据直连（手机 DSH Go）。凭据只用于构造请求头，不写文件。
         if (req.method === 'GET' && route === '/workbuddy') {
           const desktop = await probeDesktop()
           if (!desktop.running) {
-            json(res, 200, {
-              provider: WORKBUDDY_PROVIDER,
-              desktop,
-              loggedIn: false,
-              models: [],
-              message: 'WorkBuddy 桌面端未运行，模型渠道暂不可用（启动桌面端后刷新即可）',
-            })
-            return
+            const credential = await resolveWorkBuddyCredential().catch(() => undefined)
+            if (credential === undefined) {
+              json(res, 200, {
+                provider: WORKBUDDY_PROVIDER,
+                desktop,
+                transport: 'none',
+                loggedIn: false,
+                models: [],
+                message: '未检测到 WorkBuddy 桌面端，本设备也未登录 WorkBuddy 账号。请在设置页添加一个 WorkBuddy 账号后即可用直连模式（手机端）',
+              })
+              return
+            }
+            // 有凭据：直连模式继续往下走（下面的 account()/models() 会自动选直连）
           }
           const account = await workBuddyChannel.runtime.account().catch(() => null)
           let models = []
@@ -850,6 +872,7 @@ export function apply(ctx) {
           json(res, 200, {
             provider: WORKBUDDY_PROVIDER,
             desktop,
+            transport: workBuddyChannel.runtime.transport,
             loggedIn: account !== null,
             account: account === null ? null : {
               uid: account.uid,
