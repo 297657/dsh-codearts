@@ -20,7 +20,7 @@
 
 import { randomBytes } from 'node:crypto'
 
-import { CHANNELS, channelById, accountsOf, readCredential } from './lib/credentials.js'
+import { CHANNELS, channelById, accountsOf, readCredential, resolveCredential } from './lib/credentials.js'
 import { codeArtsIdentity } from './lib/identity.js'
 import { findDuplicateAccount, markDuplicates } from './lib/duplicates.js'
 import { fetchBuddyStatus, fetchBuddyCredit, claimBuddy } from './lib/buddy.js'
@@ -150,9 +150,10 @@ async function refreshOnce(refName, credential, deps) {
  * 也不要因为网络抖动把本来能签到的账号判死。
  */
 async function credentialOf(account, deps) {
-  const credential = readCredential(account.credentialRef)
+  // 凭据读取走双通道：手机 DSH Go 只有 ctx.credentials 服务，桌面端两套都可。
+  const credential = await resolveCredential(account.credentialRef, deps?.getCredentials?.())
   if (credential === undefined) {
-    return { ok: false, message: `找不到凭据 ${account.credentialRef}（可能已被删除，请重新登录）` }
+    return { ok: false, message: `找不到凭据 ${account.credentialRef}（可能已被删除或未在本设备登录）` }
   }
 
   if (account.provider === 'codearts') {
@@ -600,7 +601,8 @@ export function apply(ctx) {
   const logger = ctx.logger ?? console
 
   // 凭据服务：退出账号要真的把凭据从存储里清掉，只删池记录等于留下孤儿密钥。
-  // 单独注入而不是并进 webServer，缺了它只影响「退出账号」，签到照常可用。
+  // 同时它也是跨平台读取凭据的唯一通道——手机 DSH Go 上没有桌面端的明文
+  // YAML 文件，凭据只在这套服务里。缺了它：写/退出账号不可用，读取回退文件。
   let credentials = null
   ctx.inject(['credentials'], scoped => {
     credentials = scoped.credentials
@@ -609,7 +611,8 @@ export function apply(ctx) {
 
   // 续期要能把新凭据写回存储，而 inject 是异步的：用 getter 而不是抓当前值，
   // 否则自动签到那一轮可能拿到 null，续期成功却写不回去。
-  const deps = { getStore: () => credentials }
+  // getCredentials 供 credentialOf 走双通道读取（手机端必需）。
+  const deps = { getStore: () => credentials, getCredentials: () => credentials }
 
   // ── 取一份「现在就能用」的 CodeArts 凭据（含临期自动续期）─────────────────
   // 模型渠道与签到共用同一条取凭据路径，续期逻辑只写一遍。
@@ -675,15 +678,30 @@ export function apply(ctx) {
     }, 'dsh-codearts-checkin: adapter')
 
     // ── WorkBuddy 渠道（别名 wbai，避开 OFM 的 provider 黑名单）────────────
-    // 与 CodeArts 渠道互不影响：这里抛错只丢 WorkBuddy，不能让签到跟着掉。
+    // 这个渠道强依赖本机的 WorkBuddy 桌面端：wbipc 命名管道 + 127.0.0.1 的
+    // 18488/18489/18490 探测端口。手机 DSH Go 上两者都不存在，注册一个连不上
+    // 的渠道只会让用户选中后报错。所以照搬 Our Free Model 的「桌面专属渠道
+    // 闸门」：先探测桌面端，探测不到就整条渠道不注册，安全降级；桌面端行为
+    // 完全不变。与 CodeArts 渠道互不影响——这里失败只丢 WorkBuddy。
     scoped.effect(() => {
-      try {
-        const dispose = llm.registerAdapter([WORKBUDDY_PROVIDER], workBuddyChannel.adapter)
-        logger.info?.(`dsh-codearts-checkin: WorkBuddy llm adapter registered as ${WORKBUDDY_PROVIDER}`)
-        return dispose
-      } catch (error) {
-        logger.warn?.(`dsh-codearts-checkin: WorkBuddy 渠道注册失败（不影响签到）：${error?.message ?? error}`)
-        return undefined
+      let dispose = undefined
+      let cancelled = false
+      void probeDesktop().then(desktop => {
+        if (cancelled) return
+        if (!desktop?.running) {
+          logger.info?.('dsh-codearts-checkin: 未检测到 WorkBuddy 桌面端，跳过 wbai 渠道（手机端正常现象）')
+          return
+        }
+        try {
+          dispose = llm.registerAdapter([WORKBUDDY_PROVIDER], workBuddyChannel.adapter)
+          logger.info?.(`dsh-codearts-checkin: WorkBuddy llm adapter registered as ${WORKBUDDY_PROVIDER}`)
+        } catch (error) {
+          logger.warn?.(`dsh-codearts-checkin: WorkBuddy 渠道注册失败（不影响签到）：${error?.message ?? error}`)
+        }
+      }).catch(() => {})
+      return () => {
+        cancelled = true
+        try { dispose?.() } catch { /* 已释放 */ }
       }
     }, 'dsh-codearts-checkin: workbuddy adapter')
   })
