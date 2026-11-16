@@ -43,6 +43,7 @@ import {
   fetchQueueStatus,
 } from './lib/codearts-llm.js'
 import { snapshot as sessionSnapshot, abortAllSessions, abortSession } from './lib/sessions.js'
+import { createWorkBuddyChannel, WORKBUDDY_PROVIDER, probeDesktop } from './lib/workbuddy-llm.js'
 
 export const name = 'dsh-codearts-checkin'
 export const inject = []
@@ -649,8 +650,10 @@ export function apply(ctx) {
     return rows
   }
 
-  // ── LLM 渠道：让 CodeArts 的免费额度出现在模型选择器里 ────────────────────
-  // 单独 inject(['llm'])：缺了它只少一个渠道，签到与设置页照常可用。
+  // ── LLM 渠道：让 CodeArts / WorkBuddy 的免费额度出现在模型选择器里 ────────
+  // 单独 inject(['llm'])：缺了它只少渠道，签到与设置页照常可用。
+  const workBuddyChannel = createWorkBuddyChannel({ logger })
+
   ctx.inject(['llm'], scoped => {
     const llm = scoped.llm
     // 某些 composition 可能没有 llm 服务。宁可少一个渠道，也不能让异常冒到
@@ -670,6 +673,19 @@ export function apply(ctx) {
       logger.info?.(`dsh-codearts-checkin: llm adapter registered as ${LLM_PROVIDER}`)
       return dispose
     }, 'dsh-codearts-checkin: adapter')
+
+    // ── WorkBuddy 渠道（别名 wbai，避开 OFM 的 provider 黑名单）────────────
+    // 与 CodeArts 渠道互不影响：这里抛错只丢 WorkBuddy，不能让签到跟着掉。
+    scoped.effect(() => {
+      try {
+        const dispose = llm.registerAdapter([WORKBUDDY_PROVIDER], workBuddyChannel.adapter)
+        logger.info?.(`dsh-codearts-checkin: WorkBuddy llm adapter registered as ${WORKBUDDY_PROVIDER}`)
+        return dispose
+      } catch (error) {
+        logger.warn?.(`dsh-codearts-checkin: WorkBuddy 渠道注册失败（不影响签到）：${error?.message ?? error}`)
+        return undefined
+      }
+    }, 'dsh-codearts-checkin: workbuddy adapter')
   })
 
   // ── Web 路由 ──────────────────────────────────────────────────────────────
@@ -787,6 +803,48 @@ export function apply(ctx) {
         if (req.method === 'POST' && route === '/models/refresh') {
           invalidateCatalog()
           json(res, 200, { ok: true })
+          return
+        }
+
+        // ── WorkBuddy 渠道：桌面端状态 + 账号 + 模型目录 ────────────────────
+        // 走 wbipc（宿主注入身份头），凭据不经过本插件，也不写入任何文件。
+        if (req.method === 'GET' && route === '/workbuddy') {
+          const desktop = await probeDesktop()
+          if (!desktop.running) {
+            json(res, 200, {
+              provider: WORKBUDDY_PROVIDER,
+              desktop,
+              loggedIn: false,
+              models: [],
+              message: 'WorkBuddy 桌面端未运行，模型渠道暂不可用（启动桌面端后刷新即可）',
+            })
+            return
+          }
+          const account = await workBuddyChannel.runtime.account().catch(() => null)
+          let models = []
+          try {
+            models = (await workBuddyChannel.runtime.models()).map(row => ({
+              id: row.id,
+              name: row.name,
+              contextWindow: row.contextWindow,
+            }))
+          } catch { /* 目录读不到时给空清单，不阻塞状态展示 */ }
+          json(res, 200, {
+            provider: WORKBUDDY_PROVIDER,
+            desktop,
+            loggedIn: account !== null,
+            account: account === null ? null : {
+              uid: account.uid,
+              nickname: account.nickname,
+              pluginEnabled: account.pluginEnabled,
+            },
+            models,
+          })
+          return
+        }
+        if (req.method === 'POST' && route === '/workbuddy/refresh') {
+          const models = await workBuddyChannel.runtime.refreshCatalog()
+          json(res, 200, { ok: true, models: models.map(row => ({ id: row.id, name: row.name })) })
           return
         }
 

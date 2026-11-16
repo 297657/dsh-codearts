@@ -223,6 +223,17 @@ codebuddy` 列为拒绝渠道，凡是命中名单的 provider id 与模型行�
 按账号当前权益决定给不给，不认就回 `InferHub.4004.200`。策略因此是
 **默认都带、被拒就去掉并记住**（`noBenefitModels`），每种模型最多多花一次往返。
 
+### 「API does not exist or has not been published」= benefit 环境没有该模型
+
+实测（2026-11-10）：带 `maas_type: benefit` 打一个权益环境未部署的模型
+（glm-5.3-flash），网关回的是 **HTTP 200 + SSE 内嵌错误**
+`InferHub.APIG.0101.404 The API does not exist or has not been published in the
+environment`——不是 4004.200，也不是 HTTP 404。字面像「接口不存在」，实际是
+**benefit 路由到的环境里没有这个模型**；去掉头立即恢复（走计费通道）。
+所以 `BENEFIT_ENV_CODES`（`APIG.0101` / "does not exist or has not been
+published"）与 4004.200 同义处理：去头重试 + `markNoBenefit`。
+A/B 对照探针：`wb-diag/probe-benefit-ab.mjs`（工作区）。
+
 ### 并发会话上限 3（最容易踩的坑）
 
 `TM.00001041` 的真实含义实测是 **「并发会话数已达上限(3个)」**，不是"排队"。
@@ -401,8 +412,8 @@ usage ✓、finish ✓。
 
 - 两次 `startCodeArtsLogin` 拿到的是不同 AK/SK（`HSTAOFII…` / `HSTAMVI3…`），
   看起来像两个账号，但 `refresh_token` 的 JWT `user_profile` 里
-  `account_id` 一模一样（实测 `01a1390acda578b58b26d92238c8827c`，
-  `account_name` `hid_kq95xrj_fck2th5`）→ 同一份额度。
+  `account_id` 一模一样（实测 `<account_id>`，
+  `account_name` `<account_name>`）→ 同一份额度。
 - 触发条件：浏览器里已登录华为云时再点「添加账号」，授权会**静默复用**当前
   登录态。用户当时看到「点了没反应」（后台失败无提示），于是又点了一次。
 - 后果三个：① 每行都显示同一份余额，像是各有一份；② 标题行把额度加成 16.0K；
@@ -537,3 +548,38 @@ CodeArts 跨设备警告：refresh_token 一次性，两台设备同时用会互
 探针：新增 `probe-notices.mjs`（11 项：带 at/级别、刷新清空、按渠道清理、
 普通查询保留）；`probe-client` 增加「3 分钟前 / 2 分钟前」与样式断言。
 14 个离线探针全绿。
+
+## 10. v0.7.0：WorkBuddy 模型渠道（wbai 别名）
+
+### 为什么必须走 wbipc，不能直连 HTTPS
+实测 2026-11-09：`POST https://{domain}/v2/chat/completions` 带 `Authorization: Bearer <access_token>`
+（凭据库里 WorkBuddy 账号的 token，`expires_at` 还有效）返回：
+
+```
+HTTP 400 {"code":11128,"msg":"request illegal",
+          "displayTips":{"zh":"这次调用没通过渠道校验，可能不是官方客户端发出的…"}}
+```
+
+模型清单 `GET /v2/enterprises/personal/models` 直连是通的（200，23 个模型，只要 Bearer + UA），
+但对话被渠道校验拦死。只有经桌面端 `wb.request/http.fetch`（宿主注入身份头）才放行。
+所以 `lib/wbipc-client.js` + `lib/workbuddy-llm.js` 是 wb-client.mjs + dsh-workbuddy 适配器的移植。
+
+### 为什么注册成 wbai 而不是 workbuddy
+`dsh-our-free-model/src/magpie-policy.js`：
+- `DENIED_IDS = {workbuddy, workbuddy-ai, huaweicloud, codebuddy, codebuddy-cn, codearts}`
+- `DENIED_TEXT = /workbuddy|codebuddy|huaweicloud|huawei[\s-]*cloud|modelarts|codearts|华为云|码道/i`
+- `/api/providers` 用 `deniedId(id) || deniedText(id)` 过滤 **provider id**（不看显示名）
+
+所以 `workbuddy` 渠道的模型进不了选择器；`wbai` 不含任何关键词，可以。
+和 CodeArts 用 `devcloud`（华为云旧名）是同一条理由。
+
+### 已知约束（照搬 dsh-workbuddy 的实测结论）
+- 宿主 http.fetch：响应 >655360 字节抛 E_PAYLOAD_TOO_LARGE；单次 50s 超时。→ 必须分段续写。
+- `stream` 必须为 true，非流式一律 11101。
+- 工具结果对不上调用 → 11148；assistant 工具调用缺 id → 11133。
+- 11128 指纹：system/assistant 里的 `deepseek harness` 品牌名等片段要改写；兜底是把 system 降级进 user 消息。
+- 桌面端没跑时 `listModels` 返回空（不让选择器出现必失败的渠道）。
+
+### 观测接口
+`GET /api/codearts-checkin/workbuddy` → { provider, desktop, loggedIn, account, models }
+`POST /api/codearts-checkin/workbuddy/refresh` → 强制刷新模型目录

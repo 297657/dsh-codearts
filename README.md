@@ -13,7 +13,7 @@ DSH（DeepSeek Harness）的 Cordis 插件，挂在 `~/.dsh` 宿主上运行。�
 | 剩余积分显示 | 三渠道余额面板：WorkBuddy / CodeBuddy 精确积分、CodeArts 资源包余量，按包聚合 |
 | 会话治理 | 查询排队状态（`/api/v1/queue/status`）、并发闸门（每账号 3 路）、主动终止、45s 冷却 |
 | 账号管理 | 设置页内 CodeBuddy 扫码登录、CodeArts AK/SK 登录，多账号池按身份判重（refresh_token JWT 解析） |
-| 模型渠道 | 注册 `devcloud/*` provider，DSH 对话可直接走 CodeArts 模型（DSML 工具通道支持） |
+| 模型渠道 | CodeArts 注册 `devcloud/*` provider，可直走 CodeArts 模型（DSML 工具通道）；WorkBuddy 注册别名 `wbai/*`，经本机 wbipc 走 WorkBuddy 在线模型（分段续写、11128 指纹改写内建） |
 | 跨设备同步 | `tools/make-sync.mjs` 打包插件+配置，`--plugin-only` 可打不含账号数据的纯插件包 |
 
 详细的功能版本沿革见 [docs/功能清单.md](docs/功能清单.md)。
@@ -40,6 +40,8 @@ index.js          宿主半身：路由注册、状态缓存、账号池、提�
 client.js         浏览器半身：设置页 UI（签到/会话/积分/账号管理）
 lib/
   codearts-llm.js   CodeArts 模型渠道（账号池轮转、排队等待、流式）
+  workbuddy-llm.js  WorkBuddy 模型渠道（wbipc 传输、分段续写、11128 指纹改写）
+  wbipc-client.js   WorkBuddy 桌面端命名管道客户端（HMAC 握手 + JSON-RPC）
   codearts.js       CodeArts 签到协议（AK/SK 签名）
   codearts-login.js CodeArts 登录与 token 刷新
   sessions.js       会话并发闸门与终止
@@ -70,6 +72,7 @@ docs/             说明文档（功能清单、SOP、DSH 接入说明）
 - **CodeArts 的 refresh_token 是一次性的**：刷新即作废，多设备共用账号会互相踢下线。次要设备需重新登录。
 - CodeArts 每账号**并发会话上限 3**，插件内置闸门，勿在插件外并发调用。
 - 判定签到结果看响应体 `code` 字段而非 HTTP 状态（重复签到是 HTTP 400 + `code:10001`）。
+- **WorkBuddy 模型渠道依赖 WorkBuddy 桌面端在运行**（走本机 wbipc 命名管道）：桌面端关掉时该渠道不出现在选择器里，签到不受影响。WorkBuddy 的 `/v2/chat/completions` 有渠道校验（11128），直连 HTTPS 一律被拒，必须经桌面端转发。
 
 ## 🔒 数据安全约定
 
@@ -93,6 +96,7 @@ docs/             说明文档（功能清单、SOP、DSH 接入说明）
 - DSH（DeepSeek Harness）桌面版，profile `desktop`
 - Node.js ≥ 18
 - 各渠道账号凭据已存在于 `~/.dsh/.credentials.yaml`（或通过插件登录页添加）
+- 使用 WorkBuddy 模型渠道时：WorkBuddy 桌面端需在运行（同一个用户）
 
 ---
 

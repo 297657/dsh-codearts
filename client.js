@@ -128,7 +128,7 @@ window.__ModuleLoader__.load({
      * 积分包明细：按包名聚合后取「剩余/总额」最大的三类。
      *
      * 必须聚合：腾讯系实际会给 10~20 个包，但包名只有两三种
-     * （实测 momo 12 个包 / 2 个包名，ID 未展示 14 个包 / 3 个包名）。
+     * （实测两个账号分别是 12 个包 / 2 个包名、14 个包 / 3 个包名）。
      * 逐个列出来是一堵墙，按名字加起来才是用户想看的那几个数。
      */
     function packageLine(row) {
@@ -337,6 +337,8 @@ window.__ModuleLoader__.load({
       // 会话面板：本机在途流（服务端没有查询接口，只能管好自己发起的）。
       const [sessions, setSessions] = useState(null)
       const [queue, setQueue] = useState(null)
+      // WorkBuddy 模型渠道：桌面端是否在跑、wbipc 能读到几个模型。
+      const [wb, setWb] = useState(null)
 
       /**
        * 读状态。
@@ -359,6 +361,13 @@ window.__ModuleLoader__.load({
       }, [])
 
       useEffect(() => { void load(false) }, [load])
+
+      /** 查一次 WorkBuddy 模型渠道状态。失败只让面板停留在「未知」，不弹错。 */
+      const loadWorkBuddy = useCallback(async () => {
+        try { setWb(await api('/workbuddy')) } catch { setWb(null) }
+      }, [])
+
+      useEffect(() => { void loadWorkBuddy() }, [loadWorkBuddy])
 
       /** 拉一次本机在途会话。失败只让面板停在旧值，不弹错——它只是观测面。 */
       const loadSessions = useCallback(async () => {
@@ -522,10 +531,20 @@ window.__ModuleLoader__.load({
 
         h('div', { className: 'dcs_actions' },
           h('button', { type: 'button', className: 'dcs_btn primary', disabled: busy || claiming, onClick: claim }, claiming ? '签到中…' : '立即签到'),
-          h('button', { type: 'button', className: 'dcs_btn ghost', disabled: busy || claiming, onClick: () => load(true) }, busy ? '刷新中…' : '刷新')),
+          h('button', { type: 'button', className: 'dcs_btn ghost', disabled: busy || claiming, onClick: () => { void load(true); void loadWorkBuddy() } }, busy ? '刷新中…' : '刷新')),
 
         error ? h('div', { className: 'dcs_panel' }, h('p', { className: 'dcs_note dcs_err' }, error)) : null,
         notice ? h('div', { className: 'dcs_panel' }, h('p', { className: 'dcs_note' }, notice)) : null,
+
+        // 模型渠道：CodeArts 走 devcloud，WorkBuddy 走 wbai（别名避开 OFM 的渠道黑名单）
+        h('div', { className: 'dcs_panel' },
+          h('p', { className: 'dcs_note' },
+            wb === null
+              ? '模型渠道：CodeArts 为「devcloud」；WorkBuddy 状态检查中…'
+              : wb.desktop?.running !== true
+                ? '模型渠道：CodeArts 为「devcloud」；WorkBuddy 桌面端未运行，其在线模型暂不进选择器（启动桌面端后点「刷新」）。'
+                : `模型渠道：CodeArts 为「devcloud」；WorkBuddy 为「${wb.provider}」，已读到 ${wb.models?.length ?? 0} 个在线模型`
+                  + `${wb.loggedIn === false ? '（桌面端尚未登录，先登录 WorkBuddy）' : ''}。`)),
 
         result ? h('div', { className: 'dcs_panel' },
           h('p', { className: 'dcs_note' },

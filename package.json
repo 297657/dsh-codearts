@@ -1,10 +1,10 @@
 {
   "name": "@local/dsh-codearts",
-  "version": "0.6.5",
+  "version": "0.7.1",
   "private": true,
   "type": "module",
   "main": "./index.js",
-  "description": "CodeArts (Huawei Cloud) daily check-in and free-credit model channel inside DeepSeek Harness: browser login (OAuth+PKCE+DPoP), automatic credential renewal, per-account credit balances, SigV4-signed chat completions with tool calls (standard channel plus DSML for deepseek-v4), per-account session gating with account rotation, and a cached settings API whose transient notices carry timestamps and are cleared on refresh.",
+  "description": "CodeArts (Huawei Cloud) daily check-in and free-credit model channel inside DeepSeek Harness, plus WorkBuddy check-in and a wbipc-backed WorkBuddy online-model channel (alias provider): browser login (OAuth+PKCE+DPoP), automatic credential renewal, per-account credit balances, SigV4-signed chat completions with tool calls (standard channel plus DSML for deepseek-v4), per-account session gating with account rotation, segmented continuation for the WorkBuddy host limits, and a cached settings API whose transient notices carry timestamps and are cleared on refresh.",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js"
