@@ -44,6 +44,7 @@ import {
 } from './lib/codearts-llm.js'
 import { snapshot as sessionSnapshot, abortAllSessions, abortSession } from './lib/sessions.js'
 import { createWorkBuddyChannel, WORKBUDDY_PROVIDER, probeDesktop } from './lib/workbuddy-llm.js'
+import { FALLBACK_IMAGE_PRICING } from './lib/image-pricing.js'
 
 export const name = 'dsh-codearts-checkin'
 export const inject = []
@@ -511,6 +512,14 @@ class CodeArtsAdapter {
       maxDelayMs: 8000,
       jitterRatio: 0.2,
     })
+  }
+
+  /**
+   * 同步的图片计价估算。DSH 在 token 计量/上下文压缩阶段每次测量都会调用，
+   * 缺这个方法会让声明了视觉能力的渠道在压缩时抛 TypeError。
+   */
+  imageRequestPricing(_provider, _model) {
+    return FALLBACK_IMAGE_PRICING
   }
 
   async listModels(provider) {
