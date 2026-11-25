@@ -18,6 +18,7 @@ DSH（DeepSeek Harness）的 Cordis 插件，挂在 `~/.dsh` 宿主上运行。�
 | 手机 / 桌面跨平台（v0.8.0+） | 同一份代码在桌面 DSH 与手机 DSH Go 本机引擎上都可用；凭据走宿主 `ctx.credentials` 双通道 |
 | WorkBuddy 手机直连（v0.9.0） | WorkBuddy 模型渠道不再依赖 Windows 桌面端：桌面走 wbipc，手机用凭据直连网关，两端都能用 |
 | 上下文压缩兼容（v0.9.1） | `wbai/*` 与 `devcloud/*` 都实现同步的 `imageRequestPricing()`，修复压缩/模型切换时报 `imageRequestPricing is not a function` |
+| 模型目录接口更新（v0.9.2） | 改读 `/v3/config`，修复旧接口 404 导致只剩 6 个内置模型、`hy4flash` 等新模型消失；自动滤掉图片/视频生成模型 |
 
 详细的功能版本沿革见 [docs/功能清单.md](docs/功能清单.md)。
 
