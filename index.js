@@ -45,6 +45,7 @@ import {
 import { snapshot as sessionSnapshot, abortAllSessions, abortSession } from './lib/sessions.js'
 import { createWorkBuddyChannel, WORKBUDDY_PROVIDER, probeDesktop } from './lib/workbuddy-llm.js'
 import { FALLBACK_IMAGE_PRICING } from './lib/image-pricing.js'
+import { KiloDirectAdapter, FREE_MODELS as KILO_FREE_MODELS, probeChat as probeKiloChat, probeCatalog as probeKiloCatalog } from './lib/kilo-direct.js'
 
 export const name = 'dsh-codearts-checkin'
 export const inject = []
@@ -62,6 +63,15 @@ const REQUEST_TIMEOUT_MS = 45_000
  * 于是模型能正常出现在选择器里。这是兼容既有插件的必要取舍，不是伪装。
  */
 const LLM_PROVIDER = 'devcloud'
+
+/**
+ * Kilo 免费池直连渠道。
+ *
+ * 与 `magpie` 的区别：magpie 指向本机 Magpie 应用的 3425 网关，那一跳会挂死；
+ * `kilodirect` 直接请求 api.kilo.ai，不依赖任何本地应用或账号凭据，也不含
+ * OFM 的拒绝关键词（workbuddy/codearts/huawei/codebuddy）。
+ */
+const KILO_PROVIDER = 'kilodirect'
 
 function today() {
   // 签到按 UTC+8 自然日结算（两家都是）。用固定偏移而不是本地时区，
@@ -695,6 +705,21 @@ export function apply(ctx) {
       return dispose
     }, 'dsh-codearts-checkin: adapter')
 
+    // ── Kilo 免费池直连 ─────────────────────────────────────────────────
+    // 不依赖本地 Magpie 应用、不依赖任何账号凭据：匿名直连 api.kilo.ai。
+    // 注册失败只丢这个渠道，不影响签到与其它模型渠道。
+    scoped.effect(() => {
+      try {
+        const adapter = new KiloDirectAdapter({ logger })
+        const dispose = llm.registerAdapter([KILO_PROVIDER], adapter)
+        logger.info?.(`dsh-codearts-checkin: llm adapter registered as ${KILO_PROVIDER}`)
+        return dispose
+      } catch (error) {
+        logger.warn?.(`dsh-codearts-checkin: Kilo 直连渠道注册失败（不影响其它功能）：${error?.message ?? error}`)
+        return () => {}
+      }
+    }, 'dsh-codearts-checkin: kilo direct adapter')
+
     // ── WorkBuddy 渠道（别名 wbai，避开 OFM 的 provider 黑名单）────────────
     // 这个渠道强依赖本机的 WorkBuddy 桌面端：wbipc 命名管道 + 127.0.0.1 的
     // 18488/18489/18490 探测端口。手机 DSH Go 上两者都不存在，注册一个连不上
@@ -895,6 +920,28 @@ export function apply(ctx) {
         if (req.method === 'POST' && route === '/workbuddy/refresh') {
           const models = await workBuddyChannel.runtime.refreshCatalog()
           json(res, 200, { ok: true, models: models.map(row => ({ id: row.id, name: row.name })) })
+          return
+        }
+
+        // ── Kilo 直连：模型清单 + 手动自检（GET 不探测，只有 POST 才发请求）──
+        if (req.method === 'GET' && route === '/kilo') {
+          json(res, 200, {
+            provider: KILO_PROVIDER,
+            models: KILO_FREE_MODELS.map(row => ({ id: row.id, name: row.name, vision: row.vision })),
+          })
+          return
+        }
+        if (req.method === 'POST' && route === '/kilo/probe') {
+          const payload = await readJson(req)
+          const model = typeof payload?.model === 'string' && payload.model !== ''
+            ? payload.model
+            : KILO_FREE_MODELS[0].id
+          try {
+            const result = await probeKiloChat(model)
+            json(res, 200, { ok: true, ...result })
+          } catch (error) {
+            json(res, 200, { ok: false, model, message: error?.message ?? String(error) })
+          }
           return
         }
 
