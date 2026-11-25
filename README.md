@@ -19,7 +19,8 @@ DSH（DeepSeek Harness）的 Cordis 插件，挂在 `~/.dsh` 宿主上运行。�
 | WorkBuddy 手机直连（v0.9.0） | WorkBuddy 模型渠道不再依赖 Windows 桌面端：桌面走 wbipc，手机用凭据直连网关，两端都能用 |
 | 上下文压缩兼容（v0.9.1） | `wbai/*` 与 `devcloud/*` 都实现同步的 `imageRequestPricing()`，修复压缩/模型切换时报 `imageRequestPricing is not a function` |
 | 模型目录接口更新（v0.9.2） | 改读 `/v3/config`，修复旧接口 404 导致只剩 6 个内置模型、`hy4flash` 等新模型消失；自动滤掉图片/视频生成模型 |
-| Kilo 免费池直连（v0.9.3） | 新增 `kilodirect/*` provider，匿名直连 `api.kilo.ai`，绕过 Magpie 本地网关的挂死与 `kilo-auto/free` 共享池限流；8 个实测可用模型白名单，默认关思考以保住正文预算 |
+| Kilo 免费池直连（v0.9.3） | 新增 `kilodirect/*` provider，匿名直连 `api.kilo.ai`，绕过 Magpie 本地网关的挂死与 `kilo-auto/free` 共享池限流；8 个实测可用模型白名单 |
+| 思考默认开启（v0.9.4） | `kilodirect/*` 默认 `reasoning.effort: medium` 并抬高最低输出预算到 1024；实测会吃空正文的 `nemotron lightning` 自动降到 low；设置页关思考仍可显式关闭 |
 
 详细的功能版本沿革见 [docs/功能清单.md](docs/功能清单.md)。
 
